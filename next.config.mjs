@@ -1,8 +1,6 @@
-/** @type {import('next').NextConfig} */
+import { withWorkflow } from "workflow/next"; 
+
 const nextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   serverExternalPackages: ["@vercel/oidc"],
   images: {
     remotePatterns: [
@@ -18,4 +16,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withWorkflow(nextConfig); 
