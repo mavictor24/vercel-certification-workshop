@@ -1,11 +1,11 @@
 "use client";
 
-import { AgentChat } from "@/components/agent-chat";
 import {
   Sidebar,
   SidebarContent,
   SidebarHeader,
 } from "@/components/ui/sidebar";
+import { AgentChat } from "./agent-chat";
 
 export function AgentSidebar() {
   return (
