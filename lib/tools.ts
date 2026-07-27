@@ -1,13 +1,15 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { ApiRequestError, 
-  getBackOfficeReturns, 
-  getBackOfficeSales, 
-  getBackOfficeStock, 
-  getBackOfficeSupportTickets, createReturn, getCategories, getOrder, getProducts, getProductById, getProductStock, preauthorizeRefund, notifyReturnInProcess } from "@/lib/api"; 
-import { start } from "workflow/api"; 
-import { returnFlow } from "./workflows/return-flow"; 
-import { createOrGetSandbox, SANDBOX_NAME } from "@/lib/sandbox"; 
+import {
+  ApiRequestError, getCategories, getProductById, getProducts,
+  getBackOfficeReturns,
+  getBackOfficeSales,
+  getBackOfficeStock,
+  getBackOfficeSupportTickets,
+} from "@/lib/api";
+import { start } from "workflow/api";
+import { returnFlow } from "./workflows/return-flow";
+import { createOrGetSandbox, SANDBOX_NAME } from "@/lib/sandbox";
 
 export const bash = tool({
   description: "Run a bash command in the sandbox environment",
@@ -27,7 +29,7 @@ export const bash = tool({
 });
 
 export const searchProducts = tool({
-  description: `Search the Vercel swag store product catalog. Use this whenever the user asks about products, what the store sells, or wants recommendations. Optionally narrow results to a single category.`,
+  description: `Use this only for broad product discovery, browsing, recommendations, or category-level exploration. Do not use this for a specific single-product lookup. If the user asks about one exact product, use getProductDetails instead.`,
   inputSchema: z.object({
     query: z
       .string()
@@ -35,89 +37,49 @@ export const searchProducts = tool({
       .describe(
         `Optional free-text search terms describing what the user is looking for, e.g. 'hoodie' or 'water bottle'.`,
       ),
-    category: z 
-      .string() 
-      .optional() 
-      .describe( 
-        `Optional category slug to filter results. Only set this when the user clearly wants a specific category. Use the getAllCategories tool to get all valid categories.`, 
-      ), 
-  }),
-  execute: async ({ query, category }) => { 
-    "use step"; 
-    try {
-      const products = await getProducts({
-        search: query,
-        category, 
-        limit: 10,
-      });
-      return {
-        count: products.length,
-        products: products.map((p) => ({
-          id: p.id,
-          name: p.name,
-          slug: p.slug,
-          image: p.images[0] ?? null,
-          price: p.price,
-          currency: p.currency,
-          category: p.category,
-          description: p.description,
-        })),
-      };
-    } catch (err) {
-      const message =
-        err instanceof ApiRequestError ? err.message : "Unknown error";
-      return { count: 0, products: [], error: message };
-    }
-  },
-});
-
-export const getProductDetails = tool({
-  description: `Fetch complete details for a specific product by ID or slug. Use this when the user asks about a specific item (e.g., "Tell me more about the black hoodie" or "What are the details of product XYZ?"). Returns all available information: full description, all product images, price, tags, stock info, and metadata. This is different from searchProducts which returns partial info for multiple products.`,
-  inputSchema: z.object({
-    idOrSlug: z
+    category: z
       .string()
+      .optional()
       .describe(
-        "The product ID or slug (URL-friendly name) of the item to fetch. E.g., 'vercel-hoodie' or 'prod-123'.",
+        `Optional category slug to filter results. Only set this when the user clearly wants a specific category. Use the getAllCategories tool to get all valid categories.`,
       ),
   }),
-  execute: async ({ idOrSlug }) => {
-    try {
-      const product = await getProductById(idOrSlug);
-      const stock = await getProductStock(idOrSlug);
-      return {
-        success: true,
-        product: {
-          id: product.id,
-          name: product.name,
-          slug: product.slug,
-          description: product.description,
-          price: product.price,
-          currency: product.currency,
-          category: product.category,
-          images: product.images,
-          tags: product.tags,
-          featured: product.featured,
-          createdAt: product.createdAt,
-        },
-        stock: {
-          total: stock.stock,
-          inStock: stock.inStock,
-          lowStock: stock.lowStock,
-        },
-      };
-    } catch (err) {
-      const message =
-        err instanceof ApiRequestError ? err.message : "Unknown error";
-      return { success: false, error: message };
-    }
-  },
+  execute:
+
+    async ({ query, category }) => {
+      "use step";
+      try {
+        const products = await getProducts({
+          search: query,
+          category: category,
+          limit: 10,
+        });
+        return {
+          count: products.length,
+          products: products.map((p) => ({
+            id: p.id,
+            name: p.name,
+            slug: p.slug,
+            image: p.images[0],
+            price: p.price,
+            currency: p.currency,
+            category: p.category,
+            description: p.description,
+          })),
+        };
+      } catch (err) {
+        const message =
+          err instanceof ApiRequestError ? err.message : "Unknown error";
+        return { count: 0, products: [], error: message };
+      }
+    },
 });
 
 export const getAllCategories = tool({
   description: `List every product category available in the Vercel swag store, along with the number of products in each. Use this when the user asks what categories exist, what kinds of products are sold, or wants to browse the store at a high level.`,
   inputSchema: z.object({}),
   execute: async () => {
-    "use step"; 
+    "use step";
     try {
       const categories = await getCategories();
       return {
@@ -127,6 +89,26 @@ export const getAllCategories = tool({
           name: c.name,
           productCount: c.productCount,
         })),
+      };
+    } catch (err) {
+      const message =
+        err instanceof ApiRequestError ? err.message : "Unknown error";
+      return { count: 0, categories: [], error: message };
+    }
+  },
+});
+
+export const getProductDetails = tool({
+  description: `Use this only when the user asks about one specific product and wants details for that single item. Do not use this for broad browsing, recommendations, or category searches; use searchProducts for those cases.`,
+  inputSchema: z.object({
+    id: z.string().describe(`The unique ID of the product to retrieve.`),
+  }),
+  execute: async ({ id }) => {
+    "use step";
+    try {
+      const product = await getProductById(id);
+      return {
+        ...product,
       };
     } catch (err) {
       const message =
@@ -149,9 +131,9 @@ export const returnOrder = tool({
       .describe("Why the user is returning the order."),
   }),
   execute: async ({ orderId, reason }) => {
-    "use step"; 
-    const run = await start(returnFlow, [orderId, reason]); 
-    return { runId: run.runId, message: `Return request received for order ${orderId}.` }; 
+    "use step";
+    const run = await start(returnFlow, [orderId, reason]);
+    return { runId: run.runId, message: `Return request received for order ${orderId}.` };
   },
 });
 
@@ -321,3 +303,4 @@ export const getSalesAnalytics = tool({
     }
   },
 });
+

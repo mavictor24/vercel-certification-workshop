@@ -1,3 +1,4 @@
+// Place your chat workflow and DurableAgent here!
 import { DurableAgent } from "@workflow/ai/agent";
 import { getWritable } from "workflow";
 import {
